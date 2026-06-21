@@ -1,0 +1,17 @@
+Metadata-Version: 2.1
+Name: agentwatch-sdk
+Version: 1.0.0
+Summary: Universal Governance Monitoring for Autonomous AI Agents
+Home-page: https://github.com/muralirevuri07-boop/agentwatch
+Author: Murali Revuri
+Author-email: muralirevuri07@gmail.com
+Keywords: ai governance agents monitoring langchain langgraph
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Provides-Extra: langchain
+Provides-Extra: langgraph

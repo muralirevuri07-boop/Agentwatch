@@ -1,0 +1,7 @@
+setup.py
+agentwatch/__init__.py
+agentwatch_sdk.egg-info/PKG-INFO
+agentwatch_sdk.egg-info/SOURCES.txt
+agentwatch_sdk.egg-info/dependency_links.txt
+agentwatch_sdk.egg-info/requires.txt
+agentwatch_sdk.egg-info/top_level.txt
