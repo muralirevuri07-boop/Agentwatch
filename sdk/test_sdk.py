@@ -1,6 +1,6 @@
 import agentwatch
 
-aw = agentwatch.connect(api_key="aw_live_653c9104a8a84db5b9bb081509b4ebc0")
+aw = agentwatch.connect(api_key="aw_live_6f32f712ccac48939c4a64e1338f6ed0")
 
 @aw.monitor
 def research_agent(query):
