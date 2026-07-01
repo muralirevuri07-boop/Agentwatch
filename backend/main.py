@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 import redis
 import jwt
+import bcrypt
 from contextlib import asynccontextmanager
 
 load_dotenv()
@@ -85,7 +86,12 @@ manager = ConnectionManager()
 class RegisterSystem(BaseModel):
     name: str
     owner_email: Optional[str] = None
+    password: str
     tier: Optional[str] = "enterprise"
+
+class LoginRequest(BaseModel):
+    owner_email: str
+    password: str
 
 class AgentEvent(BaseModel):
     api_key: str
@@ -195,12 +201,19 @@ async def health():
 # ── SYSTEM REGISTRATION ─────────────────────────────────────────────────────
 @app.post("/v2/systems/register")
 async def register_system(req: RegisterSystem):
+    if req.owner_email:
+        existing = supabase.table("agent_systems").select("id").eq("owner_email", req.owner_email).execute()
+        if existing.data:
+            raise HTTPException(status_code=409, detail="An account with this email already exists. Please log in instead.")
+
     api_key = generate_api_key()
     jwt_token = generate_jwt(str(uuid.uuid4()), api_key)
-    
+    password_hash = bcrypt.hashpw(req.password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
     result = supabase.table("agent_systems").insert({
         "name": req.name,
         "owner_email": req.owner_email,
+        "password_hash": password_hash,
         "api_key": api_key,
         "tier": req.tier,
         "governance_score": 50,
@@ -376,6 +389,24 @@ async def get_dashboard(api_key: str):
     no_oversight = len([e for e in events if e.get("oversight_required") and not e.get("oversight_approved")])
     oversight_ratio = round((1 - no_oversight / max(total, 1)) * 100, 1)
     
+    from collections import defaultdict
+    agent_map = defaultdict(lambda: {"decisions": 0, "flagged": 0, "cascades": 0, "risk": "low"})
+    for e in events:
+        name = e.get("agent_name", "Unknown")
+        agent_map[name]["decisions"] += 1
+        if e.get("flagged"):
+            agent_map[name]["flagged"] += 1
+        if e.get("cascade_detected"):
+            agent_map[name]["cascades"] += 1
+        if e.get("risk_level") == "critical":
+            agent_map[name]["risk"] = "critical"
+        elif e.get("risk_level") == "high" and agent_map[name]["risk"] != "critical":
+            agent_map[name]["risk"] = "high"
+        elif e.get("risk_level") == "medium" and agent_map[name]["risk"] not in ("critical", "high"):
+            agent_map[name]["risk"] = "medium"
+
+    agents = [{"name": k, **v} for k, v in agent_map.items()]
+
     return {
         "system": system,
         "governance_score": system["governance_score"],
@@ -387,7 +418,8 @@ async def get_dashboard(api_key: str):
         "alerts": alerts[:20],
         "approval_gates": gates[:20],
         "recent_events": events[:50],
-        "certificate": cert[0] if cert else None
+        "certificate": cert[0] if cert else None,
+        "agents": agents,
     }
 
 # ── APPROVAL GATES ──────────────────────────────────────────────────────────
@@ -494,9 +526,34 @@ class ApprovalAction(BaseModel):
 async def dashboard_v1(api_key: str):
     return await get_dashboard(api_key)
 
+
+@app.post("/v1/event")
+async def event_v1(event: AgentEvent):
+    return await track_event(event)
 @app.post("/v1/register")
 async def register_v1(req: RegisterSystem):
     return await register_system(req)
+
+@app.post("/v1/login")
+async def login(req: LoginRequest):
+    result = supabase.table("agent_systems").select("*").eq("owner_email", req.owner_email).execute()
+    if not result.data:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    system = result.data[0]
+    stored_hash = system.get("password_hash")
+    if not stored_hash:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    if not bcrypt.checkpw(req.password.encode("utf-8"), stored_hash.encode("utf-8")):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    return {
+        "success": True,
+        "api_key": system["api_key"],
+        "name": system["name"],
+        "owner_email": system["owner_email"],
+    }
 
 @app.post("/v1/event")
 async def event_v1(event: AgentEvent):

@@ -4,8 +4,7 @@ import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer } fro
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
-const API = "http://localhost:8000";
-
+const API = "https://agentwatch-8eap.onrender.com";
 const C = {
   bg:"#060E1A",panel:"#0A1628",card:"#0F1E30",border:"#162840",
   accent:"#E8593C",accent2:"#4A9EE8",accent3:"#A855F7",
@@ -31,7 +30,6 @@ const NAV_ITEMS = [
   {id:"sdk",        icon:"📦",label:"SDK & Docs"},
 ];
 
-// ── UTILS ────────────────────────────────────────────────────────────────────
 function RiskBadge({level,small}){
   const r=RISK[level]||RISK.medium;
   return <span style={{background:r.bg,color:r.text,border:`1px solid ${r.border}`,borderRadius:5,padding:small?"2px 7px":"3px 10px",fontSize:small?10:11,fontWeight:700,letterSpacing:"0.07em",whiteSpace:"nowrap"}}>{r.label}</span>;
@@ -78,23 +76,23 @@ function Empty({msg}){
   return <Card><div style={{textAlign:"center",color:C.muted,padding:32,fontSize:14}}>{msg}</div></Card>;
 }
 
-// ── LOGIN PAGE ────────────────────────────────────────────────────────────────
 function LoginPage({onLogin}){
   const [mode,setMode]=useState("register");
   const [name,setName]=useState("");
   const [email,setEmail]=useState("");
+  const [password,setPassword]=useState("");
   const [apiKey,setApiKey]=useState("");
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState(null);
   const [registered,setRegistered]=useState(null);
 
   async function handleRegister(){
-    if(!name.trim())return;
+    if(!name.trim()||!email.trim()||!password.trim())return;
     setLoading(true);setError(null);
     try{
-      const res=await fetch(`${API}/v1/register`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,owner_email:email})});
+      const res=await fetch(`${API}/v1/register`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,owner_email:email,password})});
       const data=await res.json();
-      if(!data.api_key)throw new Error("Registration failed");
+      if(!data.api_key)throw new Error(data.detail||"Registration failed");
       setRegistered(data);
       localStorage.setItem("aw_api_key",data.api_key);
       localStorage.setItem("aw_system_name",name);
@@ -103,6 +101,20 @@ function LoginPage({onLogin}){
   }
 
   async function handleLogin(){
+    if(!email.trim()||!password.trim())return;
+    setLoading(true);setError(null);
+    try{
+      const res=await fetch(`${API}/v1/login`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({owner_email:email,password})});
+      const data=await res.json();
+      if(!data.success)throw new Error(data.detail||"Login failed");
+      localStorage.setItem("aw_api_key",data.api_key);
+      localStorage.setItem("aw_system_name",data.name||"My System");
+      onLogin(data.api_key);
+    }catch(e){setError("Invalid email or password.");}
+    setLoading(false);
+  }
+
+  async function handleApiKeyLogin(){
     if(!apiKey.trim())return;
     setLoading(true);setError(null);
     try{
@@ -118,7 +130,6 @@ function LoginPage({onLogin}){
 
   return(
     <div style={{background:C.bg,minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'Inter',system-ui",padding:24}}>
-      {/* Header */}
       <motion.div initial={{opacity:0,y:-20}} animate={{opacity:1,y:0}} style={{textAlign:"center",marginBottom:40}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginBottom:12}}>
           <div style={{width:10,height:10,borderRadius:"50%",background:C.red,animation:"pulse 2s infinite"}}/>
@@ -133,7 +144,6 @@ function LoginPage({onLogin}){
         </div>
       </motion.div>
 
-      {/* Stats bar */}
       <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:0.2}}
         style={{display:"flex",gap:32,marginBottom:40}}>
         {[["3 lines","to connect"],["Real-time","cascade detection"],["0%","oversight tolerated"],["GovernanceScore™","live calculated"]].map(([v,l])=>(
@@ -144,46 +154,70 @@ function LoginPage({onLogin}){
         ))}
       </motion.div>
 
-      {/* Auth card */}
       <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{delay:0.3}}
         style={{background:C.panel,border:`1px solid ${C.border}`,borderRadius:20,padding:"36px 40px",width:"100%",maxWidth:480,position:"relative",overflow:"hidden"}}>
         <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${C.accent},${C.accent2})`}}/>
 
         {!registered?(
           <>
-            {/* Tabs */}
             <div style={{display:"flex",gap:0,marginBottom:28,background:C.faint,borderRadius:10,padding:4}}>
-              {[["register","Register System"],["login","I have an API key"]].map(([m,l])=>(
+              {[["register","Register"],["login","Log In"],["apikey","API Key"]].map(([m,l])=>(
                 <button key={m} onClick={()=>{setMode(m);setError(null);}} style={{flex:1,padding:"9px",borderRadius:8,border:"none",background:mode===m?C.card:"transparent",color:mode===m?C.text:C.muted,fontSize:13,fontWeight:mode===m?600:400,cursor:"pointer",transition:"all 0.15s"}}>{l}</button>
               ))}
             </div>
 
-            {mode==="register"?(
+            {mode==="register"&&(
               <div>
                 <div style={{marginBottom:14}}>
                   <div style={{fontSize:11,color:C.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:6}}>System Name *</div>
                   <input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. My LangGraph System"
                     style={{width:"100%",padding:"11px 14px",background:C.faint,border:`1px solid ${C.border}`,borderRadius:9,fontSize:13,color:C.text,outline:"none",boxSizing:"border-box"}}/>
                 </div>
-                <div style={{marginBottom:20}}>
-                  <div style={{fontSize:11,color:C.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:6}}>Email (optional)</div>
+                <div style={{marginBottom:14}}>
+                  <div style={{fontSize:11,color:C.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:6}}>Email *</div>
                   <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com"
                     style={{width:"100%",padding:"11px 14px",background:C.faint,border:`1px solid ${C.border}`,borderRadius:9,fontSize:13,color:C.text,outline:"none",boxSizing:"border-box"}}/>
                 </div>
-                <motion.button onClick={handleRegister} disabled={loading||!name.trim()} whileHover={{scale:1.01}} whileTap={{scale:0.99}}
+                <div style={{marginBottom:20}}>
+                  <div style={{fontSize:11,color:C.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:6}}>Password *</div>
+                  <input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Minimum 8 characters"
+                    style={{width:"100%",padding:"11px 14px",background:C.faint,border:`1px solid ${C.border}`,borderRadius:9,fontSize:13,color:C.text,outline:"none",boxSizing:"border-box"}}/>
+                </div>
+                <motion.button onClick={handleRegister} disabled={loading||!name.trim()||!email.trim()||!password.trim()} whileHover={{scale:1.01}} whileTap={{scale:0.99}}
                   style={{width:"100%",background:loading?C.muted:`linear-gradient(135deg,${C.accent},#C0392B)`,border:"none",color:"#fff",borderRadius:10,padding:"14px",fontSize:15,fontWeight:700,cursor:loading?"default":"pointer"}}>
                   {loading?"Registering...":"Register & Get API Key →"}
                 </motion.button>
               </div>
-            ):(
+            )}
+
+            {mode==="login"&&(
+              <div>
+                <div style={{marginBottom:14}}>
+                  <div style={{fontSize:11,color:C.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:6}}>Email</div>
+                  <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com"
+                    style={{width:"100%",padding:"11px 14px",background:C.faint,border:`1px solid ${C.border}`,borderRadius:9,fontSize:13,color:C.text,outline:"none",boxSizing:"border-box"}}/>
+                </div>
+                <div style={{marginBottom:20}}>
+                  <div style={{fontSize:11,color:C.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:6}}>Password</div>
+                  <input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Your password"
+                    style={{width:"100%",padding:"11px 14px",background:C.faint,border:`1px solid ${C.border}`,borderRadius:9,fontSize:13,color:C.text,outline:"none",boxSizing:"border-box"}}/>
+                </div>
+                <motion.button onClick={handleLogin} disabled={loading||!email.trim()||!password.trim()} whileHover={{scale:1.01}} whileTap={{scale:0.99}}
+                  style={{width:"100%",background:loading?C.muted:`linear-gradient(135deg,${C.accent2},#2563EB)`,border:"none",color:"#fff",borderRadius:10,padding:"14px",fontSize:15,fontWeight:700,cursor:loading?"default":"pointer"}}>
+                  {loading?"Logging in...":"Log In →"}
+                </motion.button>
+              </div>
+            )}
+
+            {mode==="apikey"&&(
               <div>
                 <div style={{marginBottom:20}}>
                   <div style={{fontSize:11,color:C.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:6}}>Your API Key</div>
                   <input value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder="aw_live_..."
                     style={{width:"100%",padding:"11px 14px",background:C.faint,border:`1px solid ${C.border}`,borderRadius:9,fontSize:13,color:C.text,outline:"none",boxSizing:"border-box",fontFamily:"monospace"}}/>
                 </div>
-                <motion.button onClick={handleLogin} disabled={loading||!apiKey.trim()} whileHover={{scale:1.01}} whileTap={{scale:0.99}}
-                  style={{width:"100%",background:loading?C.muted:`linear-gradient(135deg,${C.accent2},"#2563EB")`,border:"none",color:"#fff",borderRadius:10,padding:"14px",fontSize:15,fontWeight:700,cursor:loading?"default":"pointer"}}>
+                <motion.button onClick={handleApiKeyLogin} disabled={loading||!apiKey.trim()} whileHover={{scale:1.01}} whileTap={{scale:0.99}}
+                  style={{width:"100%",background:loading?C.muted:`linear-gradient(135deg,${C.accent3},#7C3AED)`,border:"none",color:"#fff",borderRadius:10,padding:"14px",fontSize:15,fontWeight:700,cursor:loading?"default":"pointer"}}>
                   {loading?"Connecting...":"Connect to Dashboard →"}
                 </motion.button>
               </div>
@@ -192,7 +226,6 @@ function LoginPage({onLogin}){
             {error&&<div style={{marginTop:14,background:RISK.critical.bg,border:`1px solid ${C.red}`,borderRadius:9,padding:"10px 14px",fontSize:13,color:"#FCA5A5"}}>{error}</div>}
           </>
         ):(
-          // Success state
           <motion.div initial={{opacity:0,scale:0.95}} animate={{opacity:1,scale:1}}>
             <div style={{textAlign:"center",marginBottom:24}}>
               <div style={{fontSize:40,marginBottom:8}}>🎉</div>
@@ -228,7 +261,6 @@ function LoginPage({onLogin}){
   );
 }
 
-// ── COMMAND CENTER ────────────────────────────────────────────────────────────
 function CommandCenter({data}){
   if(!data)return <Spinner/>;
   const score=data.governance_score||0;
@@ -347,7 +379,6 @@ function CommandCenter({data}){
   );
 }
 
-// ── LIVE ALERTS ───────────────────────────────────────────────────────────────
 function LiveAlerts({data}){
   const alerts=data?.alerts||[];
   return(
@@ -378,7 +409,6 @@ function LiveAlerts({data}){
   );
 }
 
-// ── APPROVAL GATES ────────────────────────────────────────────────────────────
 function ApprovalGates({data,apiKey,onRefresh}){
   const gates=data?.approval_gates||[];
 
@@ -430,7 +460,6 @@ function ApprovalGates({data,apiKey,onRefresh}){
   );
 }
 
-// ── AUDIT TRAIL ───────────────────────────────────────────────────────────────
 function AuditTrail({data}){
   const [search,setSearch]=useState("");
   const events=(data?.recent_events||[]).filter(e=>
@@ -474,7 +503,6 @@ function AuditTrail({data}){
   );
 }
 
-// ── AGENT REGISTRY ────────────────────────────────────────────────────────────
 function AgentRegistry({data}){
   const agents=data?.agents||[];
   return(
@@ -514,7 +542,6 @@ function AgentRegistry({data}){
   );
 }
 
-// ── LEADERBOARD ───────────────────────────────────────────────────────────────
 function Leaderboard(){
   const [boards,setBoards]=useState([]);
   const [loading,setLoading]=useState(true);
@@ -559,7 +586,6 @@ function Leaderboard(){
   );
 }
 
-// ── ANALYZER ──────────────────────────────────────────────────────────────────
 function AnalyzerPage({apiKey,onResult}){
   const [logs,setLogs]=useState("");
   const [sysName,setSysName]=useState("");
@@ -605,7 +631,6 @@ function AnalyzerPage({apiKey,onResult}){
   );
 }
 
-// ── SDK DOCS ──────────────────────────────────────────────────────────────────
 function SDKDocs({apiKey}){
   return(
     <div>
@@ -673,7 +698,6 @@ function SDKDocs({apiKey}){
   );
 }
 
-// ── REPORT PAGE ───────────────────────────────────────────────────────────────
 function ReportPage({result,onBack}){
   const reportRef=useRef();
   const ts=new Date().toLocaleString("en-GB",{dateStyle:"long",timeStyle:"short"});
@@ -755,7 +779,6 @@ function ReportPage({result,onBack}){
   );
 }
 
-// ── MAIN APP ──────────────────────────────────────────────────────────────────
 export default function AgentWatch(){
   const [apiKey,setApiKey]=useState(()=>localStorage.getItem("aw_api_key")||null);
   const [activeTab,setActiveTab]=useState("command");
@@ -769,13 +792,18 @@ export default function AgentWatch(){
     setLoading(true);
     try{
       const res=await fetch(`${API}/v1/dashboard/${key}`);
-      if(!res.ok)throw new Error("Invalid key");
+      if(res.status===401||res.status===404){
+        localStorage.removeItem("aw_api_key");
+        setApiKey(null);
+        setLoading(false);
+        return;
+      }
+      if(!res.ok)throw new Error("Server error, will retry");
       const data=await res.json();
       setDashData(data);
       setLastRefresh(new Date().toLocaleTimeString());
     }catch(e){
-      localStorage.removeItem("aw_api_key");
-      setApiKey(null);
+      console.error("Dashboard fetch failed, keeping session:",e.message);
     }
     setLoading(false);
   },[apiKey]);
@@ -814,7 +842,6 @@ export default function AgentWatch(){
 
   return(
     <div style={{fontFamily:"'Inter',system-ui,sans-serif",background:C.bg,minHeight:"100vh",color:C.text,display:"flex"}}>
-      {/* SIDEBAR */}
       <div style={{width:220,background:C.panel,borderRight:`1px solid ${C.border}`,display:"flex",flexDirection:"column",flexShrink:0,position:"sticky",top:0,height:"100vh",overflowY:"auto"}}>
         <div style={{padding:"18px 16px 12px",borderBottom:`1px solid ${C.border}`}}>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
@@ -855,7 +882,6 @@ export default function AgentWatch(){
         </div>
       </div>
 
-      {/* MAIN */}
       <div style={{flex:1,overflowY:"auto",padding:"24px 28px",minWidth:0}}>
         <AnimatePresence mode="wait">
           <motion.div key={activeTab} initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} exit={{opacity:0}} transition={{duration:0.2}}>
@@ -876,4 +902,3 @@ export default function AgentWatch(){
     </div>
   );
 }
-
